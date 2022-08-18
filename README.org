@@ -1,0 +1,479 @@
+
+*  near-deblockle
+
+Deblockle Game contract on NEAR blockchain.
+
+** Game Description
+
+*** Rules
+
+The players start on a 7x7 board each with a set of cubes and a special
+win position on the board designated with a Star symbol, near the other
+player's edge. So, for Player 1 (Bottom) win position is at (4,2);
+for Player 2 (Top) it is (4,6).
+
+The players take turns starting from bottom side Player 1.
+Each turn has 2 phases: "Roll" and optional "Hop".
+
+During "Roll" phase the player rolls any of her cubes to the adjacent
+square across the cube edge, so that an upper face changes. Note that
+rolling a cube with "Star" facing up after the roll is only allowed into
+that player winning position! In that case the cube is removed from the
+board, and the other player takes turn (also in a "Roll" phase).
+
+In other case, after the "Roll" phase the same player makes a "Hop".
+During the "Hop", the same cube that was rolled in the previous phase
+is shifted to another free square on a board, depending on its upper
+face after the "Roll". During the "Hop" only the position of said cube
+is changed, the orientation of faces remains what it had become after
+"Roll".
+
+Cube faces and corresponding "Hop" shifts are:
+
+| Face title | Face number index | Hop shift                                                        |
+|------------+-------------------+------------------------------------------------------------------|
+| "Star"     |                 1 | --                                                               |
+| "X-hop"    |                 2 | any closest unoccupied diagonal square                           |
+| "sLide"    |                 3 | any one unoccupied square in the same row or column              |
+| "Hoops"    |                 4 | any one unoccupied square in the distance of 1 OR 3              |
+| "T-hop"    |                 5 | any closest unoccupied diagonal square in the same row or column |
+| "stoP"     |                 6 | no hop phase; another player immediately takes turn              |
+
+The goal of the game is *to remove all one's game cubes from the board*.
+
+*** This Implementation Details
+
+Some peculiarities take place in the implementation of game rules for this contract.
+They may be changed in the future.
+
+ * Players may pass their turn durin both "Roll" and "Hop" phases.
+ * Though one cannot "roll" into her winning position not facing the "Star" up,
+   she may "hop" there (effectively blocking the winning square for herself).
+   Moving to the win position of the opponent Player (either "rolling" or "hopping")
+   is forbidden.
+ * At the moment, the "sLide" and "Hoops" hop movements are strongly altered from
+   what can be found in the original board game. It probably changes the balance a lot,
+   and should be fixed.
+ * The game cubes' layout looks like the following
+   (faces designated by capital letters from titles in the table):
+  #+begin_src
+    :-:  
+    |L|  
+  :-:-:-:
+  |T|S|X|
+  :-:-:-:
+    |H|  
+    :-:  
+    |P|  
+    :-:  
+  #+end_src
+  Mind the "face number indexes" in the table. Each cube direction is encoded
+  with indexes corresponding to "up", "forward" and "right" faces. The opposite
+  face indexes can be calculated at once as 7-complements to the given:
+  the sum of the opposite face indexes is always 7 on a gaming d6 cube.
+
+The standard 4x4 game setup looks like this:
+#+begin_src
+Status: active, Player: 1, Phase: Roll
+
+Game Board:
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|P2|..|X2|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|X2|..|T2|..|..|
+4 |..|..|..|..|..|..|..|
+5 |..|..|X1|..|X1|..|..|
+6 |..|..|..|__|..|..|..|
+7 |..|..|S1|..|L1|..|..|
+#+end_src
+
+
+Game cubes designated with capital letter from the column of face titles and a player index.
+
+e.g. "P2" means game cube facing "stoP" up belonging to player 2, etc. 
+
+The sample endgame play can be found at the bottom of this page.
+
+
+** Deployment
+
+Run ~./build.sh~ located in the project root. It compiles ~./out/main.wasm~.
+
+#+begin_src shell
+  near dev-deploy --initFunction new --initArgs '{}'
+#+end_src
+
+** Contract View and Call Methods
+
+*** View Methods
+
+The game contract *views* designed to get the state of the game and individual
+game cubes.
+
+**** =game_state(index: i8)=
+
+Return the overall state of the game № ~index~. Log reflects position on the game board.
+
+#+begin_src shell :exports both
+  near view @dev-account game_state  --args '{"index": @index}' --accountId @account.testnet
+#+end_src
+
+#+RESULTS:
+#+begin_src 
+View call: deblockle-v1.hawthorne.testnet.game_state({"index": 0})
+Log [deblockle-v1.hawthorne.testnet]: Game board:
+Log [deblockle-v1.hawthorne.testnet]:   :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|T2|..|H2|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|P2|..|..|..|
+4 |..|..|..|..|..|..|..|
+5 |..|..|..|H1|..|..|..|
+6 |..|..|..|__|..|..|..|
+7 |..|..|X1|..|H1|..|..|
+{
+  game: {
+    phase: 'Roll',
+    active_player: 1,
+    board: [
+      {
+        player: 1,
+        position: { x: 3, y: 7 },
+        direction: { up: 2, front: 3, right: 6 }
+      },
+      {
+        player: 1,
+        position: { x: 5, y: 7 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 1,
+        position: { x: 4, y: 5 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 3, y: 1 },
+        direction: { up: 5, front: 3, right: 1 }
+      },
+      {
+        player: 2,
+        position: { x: 5, y: 1 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 4, y: 3 },
+        direction: { up: 6, front: 4, right: 2 }
+      }
+    ]
+  },
+  is_finished: false,
+  first_player: 'first.testnet',
+  second_player: 'second.testnet'
+}
+#+end_src
+
+**** =cube_state(index: i8, x: i8, y: i8)=
+
+Return the state of the cube at position =(x, y)= (if any) for the game № ~index~:
+its owner =player= index and the orientation given by *face index* numbers
+of its =up=, =forward= and =right= face.
+
+(as said in the Rules section, the remaining faces can be pin-pointed
+by the 7-complement rule).
+
+The log reflects ascii-representation of the layout. It should help a player to orient the cube.
+Note: for developers this is a complementary view method, because all the cubes in play are
+listed in response of =game_state=.
+
+#+begin_src shell :exports both
+  near call @dev-account cube_state --args '{"index": 0, "x": 3, "y": 1}' --accountId @account.testnet
+#+end_src
+
+#+RESULTS:
+#+begin_src
+View call: deblockle-v1.hawthorne.testnet.cube_state({"index": 0, "x": 3, "y": 1})
+Log [deblockle-v1.hawthorne.testnet]:   :-:  
+  |L|  
+:-:-:-:
+|P|T|S|
+:-:-:-:
+  |H|  
+  :-:  
+  |X|  
+  :-:  
+{
+  player: 2,
+  position: { x: 3, y: 1 },
+  direction: { up: 5, front: 3, right: 1 }
+}
+#+end_src
+
+*** Call Methods
+
+The game contract *calls* are orders to perform the moves.
+
+**** =create_game(first_player: String, second_player: String, num_cubes: Option<i8>)=
+
+Creates a deblockle game and registers it for player accounts with =first_player=
+and =second_player= accountIDs.
+
+Returns a game index of the new game.
+
+An optional parameter =num_cubes= can be one of ~[1, 2, 3, 4]~ (defaults to 4).
+It is used to select one of standard game setups where each player starts with
+=num_cubes= game cubes.
+
+#+begin_src shell :exports both
+  near call @dev-account  create_game --args '{"first_player": "first.testnet", "second_player": "second.testnet", num_cubes: 3}' --accountId @account.testnet
+#+end_src
+
+#+RESULTS:
+#+begin_src
+Scheduling a call: deblockle-v1.hawthorne.testnet.create_game({"first_player": "first.testnet", "second_player": "second.testnet", "num_cubes": 3})
+Doing account.functionCall()
+Receipt: 5M2AdLK17NB2hvyERF1yQbTRiAu4SvREe1zyCjJ8ixiJ
+	Log [deblockle-v1.hawthorne.testnet]: Created Game setup with 3 cubes per player
+Transaction Id 56J9fHwyrihuJW6jGqpTtrxEg3LVPzEYMTJTNwsp72oJ
+To see the transaction in the transaction explorer, please open this url in your browser
+https://explorer.testnet.near.org/transactions/56J9fHwyrihuJW6jGqpTtrxEg3LVPzEYMTJTNwsp72oJ
+0
+#+end_src
+
+
+**** =make_move(index: i8, from_x: i8, from_y: i8, to_x: i8, to_y: i8)=
+
+For the game labeled with =index= this call attempts to move a cube, either "Roll" or "Hop"
+depending on the game's phase, from square at position =(from_x, from_y)= to the square at
+=(to_x, to_y)=.
+
+Returns an updated game state.
+
+The validity of a move is checked internally and if the move is valid, the game state is
+changed. In other case the state remains the same, and current player has to redo the move.
+# FIXME: should panic on invalid moves?
+
+Note that the caller =@account= should be of course the ID of the games registered
+=first_player= or =second_player=, depending on who's turn it is (=active_player=).
+
+#+begin_src shell :exports both
+  near call @dev-account make_move --args '{"index": 0, "from_x": 4, "from_y": 5, "to_x": 4, "to_y": 4}' --accountId @account.testnet
+#+end_src
+
+#+RESULTS:
+#+begin_src
+Scheduling a call: deblockle-v1.hawthorne.testnet.make_move({"index": 0, "from_x": 4, "from_y": 5, "to_x": 4, "to_y":4 })
+Doing account.functionCall()
+Receipt: DYrUMejnc5FXtTkgihBWKf2avnGkaWmBnaN6CKG1dSaV
+	Log [deblockle-v1.hawthorne.testnet]: Player 1 Rolls to stop. Roll phase for another player 2.
+	Log [deblockle-v1.hawthorne.testnet]:   :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|T2|..|H2|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|P2|..|..|..|
+4 |..|..|..|P1|..|..|..|
+5 |..|..|..|..|..|..|..|
+6 |..|..|..|__|..|..|..|
+7 |..|..|X1|..|H1|..|..|
+Transaction Id J71V85DerWBkcESa8JPegBCrEhwo6CxN3MmW4upb91VC
+To see the transaction in the transaction explorer, please open this url in your browser
+https://explorer.testnet.near.org/transactions/J71V85DerWBkcESa8JPegBCrEhwo6CxN3MmW4upb91VC
+{
+  game: {
+    phase: 'Roll',
+    active_player: 2,
+    board: [
+      {
+        player: 1,
+        position: { x: 3, y: 7 },
+        direction: { up: 2, front: 3, right: 6 }
+      },
+      {
+        player: 1,
+        position: { x: 5, y: 7 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 1,
+        position: { x: 4, y: 4 },
+        direction: { up: 6, front: 4, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 3, y: 1 },
+        direction: { up: 5, front: 3, right: 1 }
+      },
+      {
+        player: 2,
+        position: { x: 5, y: 1 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 4, y: 3 },
+        direction: { up: 6, front: 4, right: 2 }
+      }
+    ]
+  },
+  is_finished: false,
+  first_player: 'first.testnet',
+  second_player: 'second.testnet'
+}
+#+end_src
+
+**** =pass_move(index: i8)=
+
+Pass the rest of the move in the game № ~index~, when called from proper =@account=
+(registered and active player in said game). The opponent player takes turn in a "Roll" phase.
+
+Returns an updated game state.
+
+#+begin_src shell :exports both
+  near call @dev-account pass_move --accountId @account.testnet
+#+end_src
+
+#+RESULTS:
+#+begin_src
+Scheduling a call: deblockle-v1.hawthorne.testnet.pass_move({"index": 0})
+Doing account.functionCall()
+Receipt: 3Rn866gp7XnnrdryMhkuFoqMdxWpB3QxRLNDJMrub54E
+	Log [deblockle-v1.hawthorne.testnet]: Player 2 passed the turn. It is player 1 Roll phase.
+Transaction Id FH8npMQb3i7738LaQ74fQChf3cZcgLoFaGqsWM8gzYBC
+To see the transaction in the transaction explorer, please open this url in your browser
+https://explorer.testnet.near.org/transactions/FH8npMQb3i7738LaQ74fQChf3cZcgLoFaGqsWM8gzYBC
+{
+  game: {
+    phase: 'Roll',
+    active_player: 1,
+    board: [
+      {
+        player: 1,
+        position: { x: 3, y: 7 },
+        direction: { up: 2, front: 3, right: 6 }
+      },
+      {
+        player: 1,
+        position: { x: 5, y: 7 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 1,
+        position: { x: 4, y: 4 },
+        direction: { up: 6, front: 4, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 3, y: 1 },
+        direction: { up: 5, front: 3, right: 1 }
+      },
+      {
+        player: 2,
+        position: { x: 5, y: 1 },
+        direction: { up: 4, front: 1, right: 2 }
+      },
+      {
+        player: 2,
+        position: { x: 4, y: 3 },
+        direction: { up: 6, front: 4, right: 2 }
+      }
+    ]
+  },
+  is_finished: false,
+  first_player: 'first.testnet',
+  second_player: 'second.testnet'
+}
+#+end_src
+
+
+** Sample Endgame Play
+
+Consider a situation, where it's player 1 turn.
+"H1" is a 1st player's cube facing "Hoops" up.
+Correspondingly, "L2" is a 2nd player's cube facing "sLide" up.
+
+#+begin_src
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|..|..|..|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|..|..|..|..|
+4 |..|..|..|H1|..|..|..|
+5 |..|..|..|..|..|..|..|
+6 |..|..|..|__|L2|..|..|
+7 |..|..|..|..|..|..|..|
+#+end_src
+
+Player 1 Rolled from (4,4) to position (5,4):
+
+#+begin_src
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|..|..|..|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|..|..|..|..|
+4 |..|..|..|..|X1|..|..|
+5 |..|..|..|..|..|..|..|
+6 |..|..|..|__|L2|..|..|
+7 |..|..|..|..|..|..|..|
+#+end_src
+
+Next goes "Hop" phase of the same player 1.
+The player consults the /current/ layout of her cube:
+
+#+begin_src
+  :-:  
+  |P|  
+:-:-:-:
+|L|X|H|
+:-:-:-:
+  |S|  
+  :-:  
+  |T|  
+  :-:  
+#+end_src
+
+Hopping into (4,3) will win the game for her next turn.
+
+Thus Player 1 Hopped from (5,4) to position (4,3).
+
+#+begin_src
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|..|..|..|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|X1|..|..|..|
+4 |..|..|..|..|..|..|..|
+5 |..|..|..|..|..|..|..|
+6 |..|..|..|__|L2|..|..|
+7 |..|..|..|..|..|..|..|
+#+end_src
+
+Next: Roll of the other player 2. She sees no opportunity to win this turn
+and rolls forward, to a stop:
+
+#+begin_src
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|..|..|..|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|X1|..|..|..|
+4 |..|..|..|..|..|..|..|
+5 |..|..|..|..|P2|..|..|
+6 |..|..|..|__|..|..|..|
+7 |..|..|..|..|..|..|..|
+#+end_src
+
+Player 1 takes the turn immediately after, rolls forward, scores and wins the game:
+#+begin_src 
+  :a  b  c  d  e  f  g
+  :1  2  3  4  5  6  7  
+1 |..|..|..|..|..|..|..|
+2 |..|..|..|__|..|..|..|
+3 |..|..|..|..|..|..|..|
+4 |..|..|..|..|..|..|..|
+5 |..|..|..|..|P2|..|..|
+6 |..|..|..|__|..|..|..|
+7 |..|..|..|..|..|..|..|
+#+end_src

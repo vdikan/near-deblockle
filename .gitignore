@@ -1,0 +1,5 @@
+target/
+neardev/
+out/
+.idea/
+deploy_and_test.sh

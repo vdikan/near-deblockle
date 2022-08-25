@@ -96,13 +96,68 @@ e.g. "P2" means game cube facing "stoP" up belonging to player 2, etc.
 The sample endgame play can be found at the bottom of this page.
 
 
-** Deployment
+** Deployment - Hackathon Edition
 
-Run ~./build.sh~ located in the project root. It compiles ~./out/main.wasm~.
+Alse, see a walkthrough of these steps inside ~./test.sh~ in the repo.
+
+1. Run ~./build.sh~ located in the project root. It compiles ~./out/main.wasm~.
+(Alternatively, use pre-built in ~./res/main.wasm~)
 
 #+begin_src shell
-  near dev-deploy --initFunction new --initArgs '{}'
+  near deploy --accountId $game_acc --wasmFile ./out/main.wasm 
 #+end_src
+
+An optional parameter =num_cubes= can be one of ~[1, 2, 3, 4]~ (defaults to 4).
+It is used to select one of standard game setups where each player starts with
+=num_cubes= game cubes.
+
+#+begin_src shell
+  near deploy --accountId $game_acc --initFunction new --initArgs '{"num_cubes": 3}'
+#+end_src
+
+2. Connect roke.to streaming contract
+
+#+begin_src shell
+  near call $game_acc connect_streaming_contract \
+      "{\"streaming_id\": \"$streaming_acc\"}" \
+      --accountId $master_acc \
+      --gas 300000000000000
+#+end_src
+
+3. Then first player must deposit any amount of any token to the game
+   contract account. Message should contain JSON map with key
+   tokens_per_sec and a value as a string. Example with wNEAR FT: 
+
+#+begin_src shell
+  near call wrap.testnet ft_transfer_call \
+      "{\"receiver_id\": \"$game_acc\", \"amount\": \"300000000000000000000000\", \"msg\": \"{\"tokens_per_sec\": \"10000\"}\"}" \
+      --depositYocto 1 \
+      --gas 300000000000000 \
+      --accountId $first_player_acc
+#+end_src
+
+4. And the second player must do exactly the same: with the same
+   token, with the same amount. Second player message unimportant, it
+   won't be used anywhere. Example with wNEAR FT:
+   
+#+begin_src shell
+  near call wrap.testnet ft_transfer_call \
+      "{\"receiver_id\": \"$game_acc\", \"amount\": \"300000000000000000000000\", \"msg\": \"\"}" \
+      --depositYocto 1 \
+      --gas 300000000000000 \
+      --accountId $secod_player_acc
+#+end_src
+
+5. Now you can start the game. It will start stream of tokens back to
+   the second player's account. The faster the first player will make
+   it's turn, the less tokens the second will recieve, and vice versa.
+
+#+begin_src shell
+  near call $game_acc start \
+      --accountId $master_acc \
+      --gas 300000000000000 
+#+end_src
+
 
 ** Contract View and Call Methods
 
@@ -111,9 +166,9 @@ Run ~./build.sh~ located in the project root. It compiles ~./out/main.wasm~.
 The game contract *views* designed to get the state of the game and individual
 game cubes.
 
-**** =game_state(index: i8)=
+**** =game_state()=
 
-Return the overall state of the game № ~index~. Log reflects position on the game board.
+Return the overall state of the game. Log reflects position on the game board.
 
 #+begin_src shell :exports both
   near view @dev-account game_state  --args '{"index": @index}' --accountId @account.testnet
@@ -121,7 +176,6 @@ Return the overall state of the game № ~index~. Log reflects position on the g
 
 #+RESULTS:
 #+begin_src 
-View call: deblockle-v1.hawthorne.testnet.game_state({"index": 0})
 Log [deblockle-v1.hawthorne.testnet]: Game board:
 Log [deblockle-v1.hawthorne.testnet]:   :a  b  c  d  e  f  g
   :1  2  3  4  5  6  7  
@@ -175,9 +229,9 @@ Log [deblockle-v1.hawthorne.testnet]:   :a  b  c  d  e  f  g
 }
 #+end_src
 
-**** =cube_state(index: i8, x: i8, y: i8)=
+**** =cube_state(x: i8, y: i8)=
 
-Return the state of the cube at position =(x, y)= (if any) for the game № ~index~:
+Return the state of the cube at position =(x, y)= (if any):
 its owner =player= index and the orientation given by *face index* numbers
 of its =up=, =forward= and =right= face.
 
@@ -189,12 +243,11 @@ Note: for developers this is a complementary view method, because all the cubes 
 listed in response of =game_state=.
 
 #+begin_src shell :exports both
-  near call @dev-account cube_state --args '{"index": 0, "x": 3, "y": 1}' --accountId @account.testnet
+  near call @dev-account cube_state --args '{"x": 3, "y": 1}' --accountId @account.testnet
 #+end_src
 
 #+RESULTS:
 #+begin_src
-View call: deblockle-v1.hawthorne.testnet.cube_state({"index": 0, "x": 3, "y": 1})
 Log [deblockle-v1.hawthorne.testnet]:   :-:  
   |L|  
 :-:-:-:
@@ -215,58 +268,26 @@ Log [deblockle-v1.hawthorne.testnet]:   :-:
 
 The game contract *calls* are orders to perform the moves.
 
-**** =create_game(first_player: String, second_player: String, num_cubes: Option<i8>)=
 
-Creates a deblockle game and registers it for player accounts with =first_player=
-and =second_player= accountIDs.
-
-Returns a game index of the new game.
-
-An optional parameter =num_cubes= can be one of ~[1, 2, 3, 4]~ (defaults to 4).
-It is used to select one of standard game setups where each player starts with
-=num_cubes= game cubes.
-
-#+begin_src shell :exports both
-  near call @dev-account  create_game --args '{"first_player": "first.testnet", "second_player": "second.testnet", num_cubes: 3}' --accountId @account.testnet
-#+end_src
-
-#+RESULTS:
-#+begin_src
-Scheduling a call: deblockle-v1.hawthorne.testnet.create_game({"first_player": "first.testnet", "second_player": "second.testnet", "num_cubes": 3})
-Doing account.functionCall()
-Receipt: 5M2AdLK17NB2hvyERF1yQbTRiAu4SvREe1zyCjJ8ixiJ
-	Log [deblockle-v1.hawthorne.testnet]: Created Game setup with 3 cubes per player
-Transaction Id 56J9fHwyrihuJW6jGqpTtrxEg3LVPzEYMTJTNwsp72oJ
-To see the transaction in the transaction explorer, please open this url in your browser
-https://explorer.testnet.near.org/transactions/56J9fHwyrihuJW6jGqpTtrxEg3LVPzEYMTJTNwsp72oJ
-0
-#+end_src
-
-
-**** =make_move(index: i8, from_x: i8, from_y: i8, to_x: i8, to_y: i8)=
+**** =make_move(from_x: i8, from_y: i8, to_x: i8, to_y: i8)=
 
 For the game labeled with =index= this call attempts to move a cube, either "Roll" or "Hop"
 depending on the game's phase, from square at position =(from_x, from_y)= to the square at
 =(to_x, to_y)=.
 
-Returns an updated game state.
-
 The validity of a move is checked internally and if the move is valid, the game state is
 changed. In other case the state remains the same, and current player has to redo the move.
-# FIXME: should panic on invalid moves?
 
 Note that the caller =@account= should be of course the ID of the games registered
 =first_player= or =second_player=, depending on who's turn it is (=active_player=).
 
 #+begin_src shell :exports both
-  near call @dev-account make_move --args '{"index": 0, "from_x": 4, "from_y": 5, "to_x": 4, "to_y": 4}' --accountId @account.testnet
+  near call @dev-account make_move --args '{"from_x": 4, "from_y": 5, "to_x": 4, "to_y": 4}' --accountId @account.testnet
 #+end_src
 
 #+RESULTS:
 #+begin_src
-Scheduling a call: deblockle-v1.hawthorne.testnet.make_move({"index": 0, "from_x": 4, "from_y": 5, "to_x": 4, "to_y":4 })
 Doing account.functionCall()
-Receipt: DYrUMejnc5FXtTkgihBWKf2avnGkaWmBnaN6CKG1dSaV
 	Log [deblockle-v1.hawthorne.testnet]: Player 1 Rolls to stop. Roll phase for another player 2.
 	Log [deblockle-v1.hawthorne.testnet]:   :a  b  c  d  e  f  g
   :1  2  3  4  5  6  7  
@@ -277,9 +298,6 @@ Receipt: DYrUMejnc5FXtTkgihBWKf2avnGkaWmBnaN6CKG1dSaV
 5 |..|..|..|..|..|..|..|
 6 |..|..|..|__|..|..|..|
 7 |..|..|X1|..|H1|..|..|
-Transaction Id J71V85DerWBkcESa8JPegBCrEhwo6CxN3MmW4upb91VC
-To see the transaction in the transaction explorer, please open this url in your browser
-https://explorer.testnet.near.org/transactions/J71V85DerWBkcESa8JPegBCrEhwo6CxN3MmW4upb91VC
 {
   game: {
     phase: 'Roll',
@@ -323,9 +341,9 @@ https://explorer.testnet.near.org/transactions/J71V85DerWBkcESa8JPegBCrEhwo6CxN3
 }
 #+end_src
 
-**** =pass_move(index: i8)=
+**** =pass_move()=
 
-Pass the rest of the move in the game № ~index~, when called from proper =@account=
+Pass the rest of the move in the game, when called from proper =@account=
 (registered and active player in said game). The opponent player takes turn in a "Roll" phase.
 
 Returns an updated game state.
@@ -336,13 +354,8 @@ Returns an updated game state.
 
 #+RESULTS:
 #+begin_src
-Scheduling a call: deblockle-v1.hawthorne.testnet.pass_move({"index": 0})
 Doing account.functionCall()
-Receipt: 3Rn866gp7XnnrdryMhkuFoqMdxWpB3QxRLNDJMrub54E
 	Log [deblockle-v1.hawthorne.testnet]: Player 2 passed the turn. It is player 1 Roll phase.
-Transaction Id FH8npMQb3i7738LaQ74fQChf3cZcgLoFaGqsWM8gzYBC
-To see the transaction in the transaction explorer, please open this url in your browser
-https://explorer.testnet.near.org/transactions/FH8npMQb3i7738LaQ74fQChf3cZcgLoFaGqsWM8gzYBC
 {
   game: {
     phase: 'Roll',
@@ -385,6 +398,12 @@ https://explorer.testnet.near.org/transactions/FH8npMQb3i7738LaQ74fQChf3cZcgLoFa
   second_player: 'second.testnet'
 }
 #+end_src
+
+**** =reset(num_cubes: i8)=
+Completely resets game state. No refunds! (yet).
+
+**** =status()= -> Status
+Gets players information. If information is missing, some fields will be null.
 
 
 ** Sample Endgame Play

@@ -1,10 +1,12 @@
 #![allow(unused_imports)]
 
 pub mod direction;
+// mod external;
 pub mod face;
 pub mod formatter;
 pub mod game;
 pub mod game_setup;
+// mod interface;
 pub mod move_pattern;
 pub mod player;
 pub mod position;
@@ -219,7 +221,6 @@ impl Contract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::json_types::ValidAccountId;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::MockedBlockchain;
     use near_sdk::{testing_env, AccountId, VMContext};
@@ -227,7 +228,7 @@ mod tests {
     // fn get_context(is_view: bool) -> VMContext {
     //     VMContextBuilder::new().is_view(is_view).build()
     // }
-    fn get_context(account: ValidAccountId) -> near_sdk::VMContext {
+    fn get_context(account: AccountId) -> near_sdk::VMContext {
         VMContextBuilder::new()
             .predecessor_account_id(account)
             .build()
@@ -239,18 +240,15 @@ mod tests {
 
         let mut contract = Contract::new();
 
-        contract.create_game(accounts(1).to_string(), accounts(2).to_string(), Some(3));
-        contract.create_game(accounts(4).to_string(), accounts(3).to_string(), Some(4));
+        contract.create_game(accounts(1), accounts(2), Some(3));
+        contract.create_game(accounts(4), accounts(3), Some(4));
 
         let game_state = contract.game_state(0);
         assert!(game_state.is_some());
-        assert_eq!(game_state.unwrap().first_player, accounts(1).to_string());
+        assert_eq!(game_state.unwrap().first_player, accounts(1));
         let game_state = contract.game_state(1);
         assert!(game_state.is_some());
-        assert_eq!(
-            game_state.as_ref().unwrap().second_player,
-            accounts(3).to_string()
-        );
+        assert_eq!(game_state.as_ref().unwrap().second_player, accounts(3));
         println!("{}", game_state.unwrap().game.format_board());
         let cube = contract.cube_state(1, 3, 1);
         assert!(cube.is_some());
@@ -262,7 +260,7 @@ mod tests {
 
         let mut contract = Contract::new();
 
-        contract.create_game(accounts(1).to_string(), accounts(3).to_string(), Some(2));
+        contract.create_game(accounts(1), accounts(3), Some(2));
 
         testing_env!(get_context(accounts(1)));
         contract.pass_move(0);
@@ -279,8 +277,8 @@ mod tests {
 
         let mut contract = Contract::new();
 
-        contract.create_game(accounts(1).to_string(), accounts(3).to_string(), Some(3));
-        contract.create_game(accounts(4).to_string(), accounts(2).to_string(), Some(4));
+        contract.create_game(accounts(1), accounts(3), Some(3));
+        contract.create_game(accounts(4), accounts(2), Some(4));
 
         testing_env!(get_context(accounts(4)));
         contract.make_move(1, 5, 5, 5, 5);
@@ -312,8 +310,8 @@ mod tests {
         let mut contract = Contract::new();
 
         let game_with_data = GameWithData {
-            first_player: accounts(1).to_string(),
-            second_player: accounts(2).to_string(),
+            first_player: accounts(1),
+            second_player: accounts(2),
             is_finished: false,
             game: Game {
                 phase: GamePhase::Roll,

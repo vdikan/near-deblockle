@@ -40,6 +40,7 @@ async fn init(worker: &Worker<impl DevNetwork>) -> anyhow::Result<(Contract, Acc
 async fn test_games_are_created() -> anyhow::Result<()> {
     let initial_balance = U128::from(parse_near!("10000 N"));
     let worker = workspaces::sandbox().await?;
+    // let worker = workspaces::testnet().await?;
     let (contract, alice, bob) = init(&worker).await?;
 
     let res = contract
@@ -64,6 +65,7 @@ async fn test_games_are_created() -> anyhow::Result<()> {
         .await?
         .json::<GameWithData>()?;
     assert_eq!(res.first_player.as_str(), alice.id().as_str());
+    println!("{:?}", res);
 
     Ok(())
 }

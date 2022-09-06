@@ -33,7 +33,7 @@ pub enum StorageKey {
     Field { game_id: GameIndex },
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GameWithData {
     pub game: Game,

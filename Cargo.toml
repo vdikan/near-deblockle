@@ -9,14 +9,32 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = "4.0.0"
-near-contract-standards = "*"
+near-contract-standards = "4.0.0"
 uint = { version = "0.9.3", default-features = false }
+
+[dev-dependencies]
+anyhow = "1.0"
+near-primitives = "0.5.0"
+near-sdk = "4.0.0"
+near-contract-standards = "4.0.0"
+near-units = "0.2.0"
+serde_json = "1.0"
+tokio = { version = "1.14", features = ["full"] }
+uint = { version = "0.9.3", default-features = false }
+workspaces = "0.4.1"
+# deblockle = { path = "./res/main.wasm" }
 
 [profile.release]
 codegen-units = 1
 # Tell `rustc` to optimize for small code size.
-opt-level = "s"
+opt-level = "z"
 lto = true
 debug = false
 panic = "abort"
 overflow-checks = true
+
+# [workspace]
+# # remember to include a member for each contract
+# members = [
+#   "deblockle",
+# ]

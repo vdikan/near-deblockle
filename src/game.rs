@@ -40,7 +40,7 @@ impl From<i8> for GamePhase {
 */
 
 /// Deblockle Game struct
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Game {
     pub phase: GamePhase,
